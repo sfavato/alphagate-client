@@ -46,7 +46,7 @@ async def webhook(
         amount = data["entry"]
         tp = data.get("tp")
         sl = data.get("sl")
-        logger.info(f"Signal received for {symbol}")
+        logger.info(f"Signal received for {symbol} (Dry Run: {settings.DRY_RUN})")
         place_order(symbol, side, amount, settings, tp, sl)
         return {"status": "ok"}
     except KeyError:

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     BITGET_SECRET_KEY: str
     BITGET_PASSPHRASE: str
     ALPHAGATE_HMAC_SECRET: str
+    DRY_RUN: bool = False
 
     model_config = SettingsConfigDict(env_file=".env")
 
