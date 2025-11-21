@@ -16,6 +16,12 @@ def place_order(
     """
     Places a market order on Bitget with optional take profit and stop loss.
     """
+    if settings.DRY_RUN:
+        logger.info(
+            f"[DRY RUN] Order Intercepted -> Symbol: {symbol}, Side: {side}, Amount: {amount}, TP: {tp}, SL: {sl}"
+        )
+        return {"id": "dry-run-id", "status": "closed", "info": "Simulated Order"}
+
     try:
         exchange = ccxt.bitget({
             'apiKey': settings.BITGET_API_KEY,
