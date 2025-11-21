@@ -5,3 +5,5 @@ ccxt
 pydantic-settings
 pytest
 httpx
+requests
+tenacity
