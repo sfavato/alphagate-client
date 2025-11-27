@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alphagate Client | Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <style>
+        .blink { animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 font-sans">
+
+    <nav class="bg-slate-800 border-b border-slate-700 p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-layer-group text-blue-500 text-xl"></i>
+                <span class="text-xl font-bold tracking-wider">ALPHAGATE <span class="text-blue-500">CLIENT</span></span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="connection-status" class="flex items-center space-x-2 text-green-500 text-sm font-semibold">
+                    <span class="w-2 h-2 bg-green-500 rounded-full blink"></span>
+                    <span>Connecté (Bitget)</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <div class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg">
+            <h3 class="text-slate-400 text-sm uppercase font-bold mb-4">Portefeuille (USDT)</h3>
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-3xl font-bold text-white" id="balance-total">--</span>
+                    <span class="text-sm text-slate-400"> USDT</span>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-slate-400">Disponible</div>
+                    <div class="text-lg font-mono text-emerald-400" id="balance-free">--</div>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between text-sm">
+                <span>Levier Max Configuré:</span>
+                <span id="leverage-value" class="text-white font-mono">--</span>
+            </div>
+        </div>
+
+        <div class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg flex flex-col justify-between">
+            <h3 class="text-slate-400 text-sm uppercase font-bold mb-4">Contrôle d'Urgence</h3>
+            <p class="text-xs text-slate-500 mb-4">En cas d'anomalie, ce bouton ferme toutes les positions et arrête le bot.</p>
+            <button onclick="triggerKillSwitch()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 flex justify-center items-center space-x-2">
+                <i class="fa-solid fa-skull"></i>
+                <span>KILL SWITCH</span>
+            </button>
+        </div>
+
+        <div class="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg md:col-span-1">
+             <h3 class="text-slate-400 text-sm uppercase font-bold mb-2">Dernier Signal Reçu</h3>
+             <div id="last-signal" class="text-xs font-mono text-slate-300 bg-slate-900 p-3 rounded h-24 overflow-auto">
+                 En attente de signal...
+             </div>
+        </div>
+
+        <div class="md:col-span-3 bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg">
+            <h3 class="text-slate-400 text-sm uppercase font-bold mb-4">Positions Ouvertes</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-900 text-xs uppercase font-medium text-slate-400">
+                        <tr>
+                            <th class="px-4 py-3">Symbole</th>
+                            <th class="px-4 py-3">Côté</th>
+                            <th class="px-4 py-3">Taille</th>
+                            <th class="px-4 py-3">Entrée</th>
+                            <th class="px-4 py-3">PnL (USDT)</th>
+                            <th class="px-4 py-3">ROE %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positions-table-body" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="6" class="px-4 py-4 text-center text-slate-500">Aucune position active</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const result = await response.json();
+
+                if(result.status === 'online' && result.data) {
+                    updateDashboard(result.data);
+                    document.getElementById('connection-status').innerHTML =
+                        '<span class="w-2 h-2 bg-green-500 rounded-full blink"></span><span>Connecté</span>';
+                } else {
+                    throw new Error("API Error");
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('connection-status').innerHTML =
+                    '<span class="w-2 h-2 bg-red-500 rounded-full"></span><span>Déconnecté</span>';
+            }
+        }
+
+        function updateDashboard(data) {
+            // Update Balance
+            if(data.balance) {
+                document.getElementById('balance-total').innerText = parseFloat(data.balance.total).toFixed(2);
+                document.getElementById('balance-free').innerText = parseFloat(data.balance.free).toFixed(2);
+            }
+
+            // Update Leverage
+            if(data.leverage) {
+                document.getElementById('leverage-value').innerText = `X${data.leverage}`;
+            }
+
+            // Update Positions
+            const tbody = document.getElementById('positions-table-body');
+            tbody.innerHTML = '';
+
+            if (data.positions && data.positions.length > 0) {
+                data.positions.forEach(pos => {
+                    const pnlClass = pos.unrealizedPnl >= 0 ? 'text-green-400' : 'text-red-400';
+                    const sideClass = pos.side === 'long' ? 'text-green-500' : 'text-red-500';
+
+                    const row = `
+                        <tr class="hover:bg-slate-700 transition">
+                            <td class="px-4 py-3 font-bold">${pos.symbol}</td>
+                            <td class="px-4 py-3 ${sideClass} uppercase font-bold">${pos.side}</td>
+                            <td class="px-4 py-3">${pos.contracts}</td>
+                            <td class="px-4 py-3">${parseFloat(pos.entryPrice).toFixed(4)}</td>
+                            <td class="px-4 py-3 ${pnlClass} font-mono">${parseFloat(pos.unrealizedPnl).toFixed(2)}</td>
+                            <td class="px-4 py-3 ${pnlClass} font-mono">${(pos.percentage || 0).toFixed(2)}%</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-slate-500">Aucune position active</td></tr>';
+            }
+        }
+
+        async function triggerKillSwitch() {
+            const secret = prompt("Pour confirmer, entrez le 'Admin Secret':", "");
+            if (secret) {
+                if(confirm("ATTENTION: Ceci va fermer toutes les positions et arrêter le trading. Continuer ?")) {
+                    try {
+                        const response = await fetch('/kill', {
+                            method: 'POST',
+                            headers: {
+                                'X-Admin-Secret': secret
+                            }
+                        });
+
+                        if(response.ok) {
+                            alert("Kill Switch activé. Le trading est arrêté.");
+                            location.reload();
+                        } else {
+                            const error = await response.json();
+                            alert(`Erreur: ${error.detail || 'Secret invalide'}`);
+                        }
+                    } catch (e) {
+                        alert("Une erreur de communication est survenue.");
+                    }
+                }
+            }
+        }
+
+        // Poll every 3 seconds
+        setInterval(fetchStatus, 3000);
+        fetchStatus(); // Initial call
+    </script>
+</body>
+</html>

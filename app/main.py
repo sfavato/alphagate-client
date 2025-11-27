@@ -1,4 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException, Header, Depends, Response
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from app.security import verify_hmac_signature
 from app import trader
@@ -9,6 +12,10 @@ import json
 from typing import Optional
 
 app = FastAPI(title="AlphaGate Client")
+
+# 1. Configuration des Templates
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -26,9 +33,31 @@ def verify_admin_access(
     if not x_admin_secret or x_admin_secret != settings.ALPHAGATE_HMAC_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-@app.get("/")
-def read_root():
-    return {"status": "AlphaGate Client is Running", "trading_enabled": TRADING_ENABLED}
+# 2. Endpoint UI (Tableau de Bord)
+@app.get("/", response_class=HTMLResponse)
+async def read_dashboard(request: Request):
+    """Affiche le tableau de bord principal."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
+# 3. Endpoint API pour l'UI (JSON Data)
+@app.get("/api/status")
+async def get_dashboard_data(settings: Settings = Depends(get_settings)):
+    """
+    Endpoint léger appelé par le JS du dashboard pour rafraîchir les données.
+    Réutilise la logique de votre endpoint /status existant.
+    """
+    try:
+        # On récupère le statut via ccxt (simulé ou réel)
+        status_data = await run_in_threadpool(trader.get_status, settings)
+        status_data["leverage"] = settings.DEFAULT_LEVERAGE
+        return {
+            "status": "online",
+            "data": status_data,
+            "system_time": time.time()
+        }
+    except Exception as e:
+        logging.error(f"Error fetching status: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/webhook")
 async def webhook(

@@ -7,3 +7,5 @@ pytest
 httpx
 requests
 tenacity
+jinja2
+aiofiles
